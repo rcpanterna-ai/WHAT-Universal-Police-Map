@@ -1,0 +1,2813 @@
+
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WHAT Universal Police Map</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: Arial, sans-serif;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+#title {
+    position: absolute;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    padding: 8px 18px;
+    background: rgba(0, 0, 0, .75);
+    color: #fff;
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: 1px solid rgba(255, 255, 255, .4);
+    border-radius: 6px;
+    text-shadow: 0 0 5px #000, 0 0 10px #000;
+    white-space: nowrap;
+}
+
+/* กล่องแสดงพิกัด */
+#mouse-coordinates,
+#clicked-coordinates {
+    position: absolute;
+    right: 15px;
+    z-index: 1000;
+    padding: 8px 12px;
+    background: rgba(0, 0, 0, .75);
+    color: #fff;
+    font-size: 14px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, .35);
+    line-height: 1.5;
+}
+
+#mouse-coordinates {
+    top: 15px;
+}
+
+#clicked-coordinates {
+    top: 75px;
+}
+
+/* NA: กรอบไอคอน 24 x 24 px */
+.marker-na {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
+/* เก็บรูปแบบ SVG สำหรับไอคอนหมวดหมู่ในอนาคต */
+.category-svg {
+    display: block;
+    width: 22px;
+    height: 22px;
+    overflow: visible;
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 1));
+}
+
+/* ชื่อสถานที่เมื่อชี้เมาส์ */
+.leaflet-tooltip {
+    background: rgba(0, 0, 0, .85);
+    color: #fff;
+    border: 1px solid #fff;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1.3;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .8);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, .8);
+}
+
+.leaflet-tooltip-top:before {
+    border-top-color: #fff;
+}
+
+@media (max-width: 600px) {
+    #title {
+        top: 10px;
+        font-size: 15px;
+        letter-spacing: 1px;
+        padding: 7px 10px;
+    }
+
+    #mouse-coordinates,
+    #clicked-coordinates {
+        right: 8px;
+        font-size: 12px;
+        padding: 6px 8px;
+    }
+
+    #mouse-coordinates {
+        top: 60px;
+    }
+
+    #clicked-coordinates {
+        top: 118px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div id="title">WHAT Universal Police Map</div>
+<div id="mouse-coordinates">X: 0<br>Y: 0</div>
+<div id="clicked-coordinates">Click X: -<br>Click Y: -</div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+/* =========================================
+   1. ตั้งค่าขนาดแผนที่
+========================================= */
+
+const mapWidth = 8192;
+const mapHeight = 8192;
+
+const bounds = [
+    [0, 0],
+    [mapHeight, mapWidth]
+];
+
+/* =========================================
+   2. สร้างแผนที่
+========================================= */
+
+const map = L.map('map', {
+    crs: L.CRS.Simple,
+    minZoom: -5,
+    maxZoom: 2,
+    zoomControl: true,
+    attributionControl: false
+});
+
+L.imageOverlay('SHANE MAP REPORT.JPG', bounds).addTo(map);
+
+map.setView([4096, 4096], -2);
+map.setMaxBounds(bounds);
+
+/* =========================================
+   3. ไอคอน NA
+   สีดำ #222222
+   จุดสีขาวตรงกลางเล็กลง
+   กรอบไอคอน 24 x 24 px
+========================================= */
+
+
+function createNaIcon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                style="display:block; overflow:visible"
+                aria-label="NA general location">
+
+                <path
+                    d="M8 15
+                    C7.3 13.8 1.2 7.5 1.2 5.8
+                    A6.8 6.8 0 1 1 14.8 5.8
+                    C14.8 7.5 8.7 13.8 8 15 Z"
+                    fill="#121212"
+                    stroke="#f1f1f1"
+                    stroke-width="0.8"
+                    stroke-linejoin="round"/>
+
+                <circle
+                    cx="8"
+                    cy="5.8"
+                    r="1.6"
+                    fill="#f1f1f1"/>
+            </svg>
+        `,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
+}
+
+
+function createBIcon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                style="display:block; overflow:visible"
+                aria-label="B location">
+
+                <path
+                    d="M8 15
+                    C7.3 13.8 1.2 7.5 1.2 5.8
+                    A6.8 6.8 0 1 1 14.8 5.8
+                    C14.8 7.5 8.7 13.8 8 15 Z"
+                    fill="#0057FF"
+                    stroke="#ffffff"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"/>
+
+                <circle
+                    cx="8"
+                    cy="5.8"
+                    r="1.9"
+                    fill="#ffffff"/>
+            </svg>
+        `,
+        iconSize: [16, 16],
+        iconAnchor: [8, 15]
+    });
+}
+
+
+function createSIcon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="20"
+                height="20"
+                viewBox="0 0 16 16"
+                style="display:block; overflow:visible"
+                aria-label="S star">
+
+                <path
+                    d="M8 0.8
+                    L10.1 5.1
+                    L14.9 5.8
+                    L11.4 9.1
+                    L12.2 14
+                    L8 11.7
+                    L3.8 14
+                    L4.6 9.1
+                    L1.1 5.8
+                    L5.9 5.1 Z"
+                    fill="#ff0000"
+                    stroke="#000000"
+                    stroke-width="1.6"
+                    stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+}
+
+
+function createA0Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                style="display:block; overflow:visible"
+                aria-label="A0 yellow pin">
+
+                <path
+                    d="M8 15
+                    C7.3 13.8 1.2 7.5 1.2 5.8
+                    A6.8 6.8 0 1 1 14.8 5.8
+                    C14.8 7.5 8.7 13.8 8 15 Z"
+                    fill="#f5e100"
+                    stroke="#000000"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"/>
+
+                <circle
+                    cx="8"
+                    cy="5.8"
+                    r="1.9"
+                    fill="#000000"/>
+            </svg>
+        `,
+        iconSize: [16, 16],
+        iconAnchor: [8, 15]
+    });
+}
+
+function createA1Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="22"
+                height="22"
+                viewBox="0 0 16 16"
+                style="display:block; overflow:visible"
+                aria-label="A1 police station">
+
+                <path
+                    d="M8 0.8 L14 3 V7.2
+                    C14 10.8 11.5 13.4 8 15
+                    C4.5 13.4 2 10.8 2 7.2 V3 Z"
+                    fill="#c000e9"
+                    stroke="#ffffff"
+                    stroke-width="0.8"
+                    stroke-linejoin="round"/>
+
+                <path
+                    d="M8 3.2 L9.1 5.5 L11.6 5.8
+                    L9.8 7.5 L10.3 10
+                    L8 8.8 L5.7 10
+                    L6.2 7.5 L4.4 5.8
+                    L6.9 5.5 Z"
+                    fill="#ffffff"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+
+function createA2Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                style="display:block; overflow:visible"
+                aria-label="A2 hospital">
+
+                <path
+                    d="M9 2 H15 V9 H22 V15 H15 V22 H9 V15 H2 V9 H9 Z"
+                    fill="#E60000"
+                    stroke="#ffffff"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+function createA3Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                style="display:block; overflow:visible"
+                aria-label="A3 gas station">
+
+                <g
+                    fill="#ed6400"
+                    stroke="#000000"
+                    stroke-width="1.7"
+                    stroke-linejoin="round">
+
+                    <path d="M5 3 H15 V21 H5 Z"/>
+                    <path d="M15 6 H18 L20 9 V17 H17 V11 H15 Z"/>
+                    <path d="M7.5 6 H12.5 V10 H7.5 Z"
+                        fill="#F7F7F7"/>
+                </g>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+function createA4Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                style="display:block; overflow:visible"
+                aria-label="A4 cocktail bar">
+
+                <g
+                    stroke="#000000"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"
+                    stroke-linecap="round">
+
+                    <path
+                        d="M3 4 H21 L14 12
+                           Q12 14 10 12 Z"
+                        fill="#ff84bb"/>
+
+                    <path
+                        d="M15 2 L10 10"
+                        fill="none"/>
+
+                    <path
+                        d="M12 13 V20 M8 21 H16"
+                        fill="none"/>
+
+                    <path
+                        d="M17 3
+                           A2 2 0 1 1 17 7
+                           A2 2 0 1 1 17 3"
+                        fill="#D71920"/>
+                </g>
+            </svg>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+    });
+}
+
+
+
+
+function createA5Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="18"
+                 height="18"
+                 viewBox="0 0 24 24"
+                 style="display:block">
+
+                <path
+                    d="M9 2 H15 L16 5.5
+                       L18.5 6.5 L21.5 4.8
+                       L24 9 L21 11
+                       V13 L24 15
+                       L21.5 19.2 L18.5 17.5
+                       L16 18.5 L15 22
+                       H9 L8 18.5
+                       L5.5 17.5 L2.5 19.2
+                       L0 15 L3 13
+                       V11 L0 9
+                       L2.5 4.8 L5.5 6.5
+                       L8 5.5 Z"
+                    fill="#FFFFFF"
+                    stroke="#000000"
+                    stroke-width="2.2"
+                    stroke-linejoin="round"
+                    transform="translate(1 1) scale(0.92)"/>
+
+                <circle
+                    cx="12"
+                    cy="12"
+                    r="4"
+                    fill="#666666"
+                    stroke="#000000"
+                    stroke-width="1.5"/>
+            </svg>
+        `,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+    });
+}
+
+
+
+
+function createA6Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24"
+                 height="24"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <g fill="none"
+                   stroke-linecap="round"
+                   stroke-linejoin="round">
+
+                    <!-- ใบกรรไกร: ขอบรอบนอกสีขาว -->
+                    <g stroke="#000000" stroke-width="6.5">
+                        <path d="M8.5 11.5 L21 5"/>
+                        <path d="M8.5 12.5 L21 19"/>
+                    </g>
+
+                    <!-- ใบกรรไกรด้านใน -->
+                    <g stroke="#F5F5F5" stroke-width="2.7">
+                        <path d="M8.5 11.5 L21 5"/>
+                        <path d="M8.5 12.5 L21 19"/>
+                    </g>
+
+                    <!-- วงแหวนด้าม: ขอบขาวรอบนอก -->
+                    <g stroke="#FFFFFF" stroke-width="7">
+                        <circle cx="5.5" cy="7" r="3.5"/>
+                        <circle cx="5.5" cy="17" r="3.5"/>
+                    </g>
+
+                    <!-- วงแหวนด้านใน -->
+                    <g stroke="#000000" stroke-width="3">
+                        <circle cx="5.5" cy="7" r="4"/>
+                        <circle cx="5.5" cy="17" r="4"/>
+                    </g>
+
+                    <!-- จุดหมุน -->
+                    <circle cx="9" cy="12" r="2.5"
+                            fill="#b20d0d"/>
+                </g>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+function createA7Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="22"
+                 height="22"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- เส้นขอบสีขาวรอบรูปทรงเสื้อ -->
+                <path
+                    d="M8 4
+                       L4 6
+                       L1.5 11
+                       L5 13
+                       L7 10
+                       L7 22
+                       L17 22
+                       L17 10
+                       L19 13
+                       L22.5 11
+                       L20 6
+                       L16 4
+                       Q12 8 8 4 Z"
+                    fill="#FFFFFF"
+                    stroke="#FFFFFF"
+                    stroke-width="1.5"
+                    stroke-linejoin="round"/>
+
+                <!-- ตัวเสื้อ -->
+                <path
+                    d="M8 4
+                       L4 6
+                       L1.5 11
+                       L5 13
+                       L7 10
+                       L7 22
+                       L17 22
+                       L17 10
+                       L19 13
+                       L22.5 11
+                       L20 6
+                       L16 4
+                       Q12 8 8 4 Z"
+                    fill="#76ff93"
+                    stroke="#000000"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"/>
+
+                <!-- คอเสื้อ -->
+                <path
+                    d="M8 4 Q12 9 16 4"
+                    fill="none"
+                    stroke="#00af9c"
+                    stroke-width="1.5"
+                    stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+
+
+
+
+function createA8Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="32" height="32"
+                 viewBox="0 0 40 36"
+                 style="display:block; overflow:visible">
+
+                <!-- ตัวปลาแบบเรียบง่ายชิ้นเดียว -->
+                <path d="
+                    M2 18
+                    L1 9
+                    L10 14
+                    Q20 7 30 17
+                    L34 18
+                    L30 20
+                    Q20 29 10 22
+                    L1 27 Z"
+                    fill="#FFC928"
+                    stroke="#111111"
+                    stroke-width="2.6"
+                    stroke-linejoin="round"/>
+
+                <!-- ตาปลา -->
+                <circle cx="25" cy="16" r="1.8"
+                        fill="#FFFFFF"/>
+
+                <!-- สายเบ็ด -->
+                <path d="M36 2 V17"
+                      fill="none"
+                      stroke="#FFFFFF"
+                      stroke-width="4"
+                      stroke-linecap="round"/>
+
+                <path d="M36 2 V17"
+                      fill="none"
+                      stroke="#222222"
+                      stroke-width="1.8"
+                      stroke-linecap="round"/>
+
+                <!-- ตะขอเบ็ดขนาดใหญ่ -->
+                <path d="
+                    M36 15
+                    V23
+                    C36 32 25 32 25 25
+                    C25 23 26 22 28 21"
+                    fill="none"
+                    stroke="#FFFFFF"
+                    stroke-width="5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"/>
+
+                <path d="
+                    M36 15
+                    V23
+                    C36 32 25 32 25 25
+                    C25 23 26 22 28 21"
+                    fill="none"
+                    stroke="#222222"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16]
+    });
+}
+
+
+
+function createA9Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24" height="24"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <text x="12" y="20"
+                      text-anchor="middle"
+                      font-family="Arial Black, Impact, sans-serif"
+                      font-size="22"
+                      font-weight="900"
+                      fill="#22C55E"
+                      stroke="#000000"
+                      stroke-width="2.5"
+                      stroke-linejoin="round"
+                      paint-order="stroke fill">P</text>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+function createA10Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- ขอบกรอบด้านนอก -->
+                <rect x="2" y="2" width="20" height="20"
+                      rx="1.5"
+                      fill="#111111"
+                      stroke="#FFFFFF"
+                      stroke-width="1.0"/>
+
+                <!-- ลูกกรงแนวตั้ง -->
+                <path d="M6 4 V20 M10 4 V20 M14 4 V20 M18 4 V20"
+                      fill="none"
+                      stroke="#AEB6BF"
+                      stroke-width="1.7"/>
+
+                <!-- เงาคนด้านใน -->
+                <circle cx="12" cy="11" r="2"
+                        fill="#FFFFFF"/>
+
+                <path d="M9 19 V16
+                         Q9 13.5 12 13.5
+                         Q15 13.5 15 16
+                         V19 Z"
+                      fill="#FFFFFF"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+
+function createA11Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24" height="24"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <text x="12" y="20"
+                      text-anchor="middle"
+                      font-family="Arial Black, Impact, sans-serif"
+                      font-size="22"
+                      font-weight="900"
+                      fill="#A020F0"
+                      stroke="#000000"
+                      stroke-width="2.5"
+                      stroke-linejoin="round"
+                      paint-order="stroke fill">P</text>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+
+
+function createA12Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24" height="24"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <text x="12" y="20"
+                      text-anchor="middle"
+                      font-family="Arial Black, Impact, sans-serif"
+                      font-size="22"
+                      font-weight="900"
+                      fill="#E51F32"
+                      stroke="#000000"
+                      stroke-width="3"
+                      stroke-linejoin="round"
+                      paint-order="stroke fill">P</text>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+
+function createA13Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="18"
+                 height="18"
+                 viewBox="0 0 24 24"
+                 style="display:block">
+
+                <!-- หมุดสีแดง ขอบสีดำ -->
+                <path
+                    d="M12 23
+                       C10 20 3 13 3 9
+                       A9 9 0 1 1 21 9
+                       C21 13 14 20 12 23 Z"
+                    fill="#ca1414"
+                    stroke="#f5f5f5"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"/>
+
+                <!-- จุดตรงกลางสีขาว -->
+                <circle
+                    cx="12"
+                    cy="9"
+                    r="2"
+                    fill="#ffffff"/>
+            </svg>
+        `,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+    });
+}
+
+
+
+function createA14Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="20"
+                 height="20"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- รถเก๋งด้านข้าง พร้อมขอบสีขาว -->
+                <path
+                    d="M1.5 14 L3.5 10 L7.5 9
+                       L10.5 6 L16.5 6
+                       L19.5 10 L22 11.5
+                       L22.5 15.5 L1.5 15.5 Z"
+                    fill="#000000"
+                    stroke="#000000"
+                    stroke-width="2.5"
+                    stroke-linejoin="round"/>
+
+                <!-- กระจกรถ -->
+                <path d="M8.5 9 L11 6.8 L16 6.8 L18 9 Z"
+                      fill="#777777"
+                      stroke="#FFFFFF"
+                      stroke-width="0.5"/>
+
+                <!-- ล้อ -->
+                <circle cx="6" cy="15.5" r="2"
+                        fill="#111111"
+                        stroke="#FFFFFF"
+                        stroke-width="1.5"/>
+                <circle cx="18.5" cy="15.5" r="2"
+                        fill="#111111"
+                        stroke="#FFFFFF"
+                        stroke-width="1.5"/>
+
+                <!-- เครื่องหมายคำถามเด่นที่สุด -->
+                <text
+                    x="12"
+                    y="14"
+                    font-family="Arial, sans-serif"
+                    font-size="22"
+                    font-weight="900"
+                    text-anchor="middle"
+                    fill="#69e901"
+                    stroke="#000000"
+                    stroke-width="3.5"
+                    stroke-linejoin="round"
+                    paint-order="stroke fill">?</text>
+            </svg>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+}
+
+
+function createA15Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="22"
+                 height="22"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- เส้นขอบสีขาวรอบไอคอน -->
+                <g stroke="#d3a609"
+                   stroke-width="3.9"
+                   stroke-linejoin="round"
+                   stroke-linecap="round">
+
+                    <path d="M3 8 L21 8 L21 15 L3 15 Z"
+                          fill="#FFFFFF"/>
+                    <path d="M5 15 L4 21 M19 15 L20 21"
+                          fill="none"/>
+                </g>
+
+                <!-- แผงไม้กั้นสีเหลืองส้ม -->
+                <path d="M3 8 L21 8 L21 15 L3 15 Z"
+                      fill="#F5A623"
+                      stroke="#000000"
+                      stroke-width="2"/>
+
+                <!-- แถบเตือนสีขาว -->
+                <path d="M7 8 L11 8 L7 15 L3 15 Z"
+                      fill="#000000"/>
+
+                <path d="M15 8 L19 8 L15 15 L11 15 Z"
+                      fill="#000000"/>
+
+                <!-- ขาตั้ง -->
+                <path d="M5 15 L4 21 L7 21 L8 15 Z"
+                      fill="#F5A623"
+                      stroke="#000000"
+                      stroke-width="1.2"
+                      stroke-linejoin="round"/>
+
+                <path d="M16 15 L17 21 L20 21 L19 15 Z"
+                      fill="#F5A623"
+                      stroke="#000000"
+                      stroke-width="1.2"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+
+function createA16Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="22"
+                 height="22"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- ขอบสีขาวรอบรูปทรงป้าย -->
+                <path
+                    d="M12 1 L23 12 L12 23 L1 12 Z"
+                    fill="#FFFFFF"
+                    stroke="#FFC400"
+                    stroke-width="3.5"
+                    stroke-linejoin="round"/>
+
+                <!-- ป้ายเตือนสีเหลือง -->
+                <path
+                    d="M12 1 L23 12 L12 23 L1 12 Z"
+                    fill="#FFC400"
+                    stroke="#000000"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"/>
+
+                <!-- สัญลักษณ์ทางลาดชัน -->
+                <path
+                    d="M5 16.5 L19 16.5 L19 7 Z"
+                    fill="#000000"
+                    stroke="#000000"
+                    stroke-width="0.5"
+                    stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+
+
+function createA17Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="26" height="26"
+                 viewBox="0 0 32 32"
+                 style="display:block; overflow:visible">
+
+                <!-- กรอบสีดำรอบตัวบ้าน -->
+                <path d="M2 8 H30 V12 H30 V27 H2 Z"
+                      fill="none"
+                      stroke="#000000"
+                      stroke-width="3.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ตัวบ้าน -->
+                <path d="M3 10 L16 4 L29 10 V27 H3 Z"
+                      fill="#E8E8E8"
+                      stroke="#f5f5f5"
+                      stroke-width="2.5"
+                      stroke-linejoin="round"/>
+
+                <!-- หลังคาแบน -->
+                <path d="M2 8 H30 V12 H2 Z"
+                      fill="#343B46"
+                      stroke="#f5f5f5"
+                      stroke-width="2.5"
+                      stroke-linejoin="round"/>
+
+                <!-- กระจกบานใหญ่ -->
+                <rect x="6" y="14"
+                      width="13" height="10"
+                      fill="#7DD3FC"
+                      stroke="#000000"
+                      stroke-width="1.8"/>
+
+                <!-- เส้นแบ่งกระจก -->
+                <path d="M12.5 14 V24"
+                      stroke="#000000"
+                      stroke-width="1.2"/>
+
+                <!-- ประตู -->
+                <rect x="21" y="15"
+                      width="5" height="12"
+                      fill="#343B46"
+                      stroke="#000000"
+                      stroke-width="1.8"/>
+
+                <!-- แสงสะท้อนกระจก -->
+                <path d="M7 15 H11 L7 20 Z"
+                      fill="#FFFFFF"/>
+            </svg>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+    });
+}
+
+
+function createA18Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="22" height="22"
+                 viewBox="0 0 32 32"
+                 style="display:block; overflow:visible">
+
+                <!-- หัวใจสีแดง -->
+                <path d="
+                    M16 28
+                    C13 25 3 18 3 10
+                    C3 3 12 2 16 9
+                    C20 2 29 3 29 10
+                    C29 18 19 25 16 28 Z"
+                    fill="#E52335"
+                    stroke="#000000"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"/>
+
+                <!-- ลูกศรสีดำพาดผ่านหัวใจ -->
+                <path d="M6 24 L25 5"
+                      fill="none"
+                      stroke="#FFFFFF"
+                      stroke-width="5"
+                      stroke-linecap="round"/>
+
+                <path d="M6 24 L25 5"
+                      fill="none"
+                      stroke="#171717"
+                      stroke-width="2.8"
+                      stroke-linecap="round"/>
+
+                <!-- หัวลูกศร -->
+                <path d="M19 5 L27 3 L25 11 Z"
+                      fill="#171717"
+                      stroke="#FFFFFF"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ปลายลูกศร -->
+                <path d="M6 24 L5 18 L12 23 Z"
+                      fill="#171717"
+                      stroke="#FFFFFF"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+
+function createA19Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28 height="28"
+                 viewBox="0 0 32 32"
+                 style="display:block; overflow:visible">
+
+                <!-- สัญลักษณ์ X สีดำด้านหลัง -->
+                <path d="M5 5 L27 27 M27 5 L5 27"
+                      fill="000000"
+                      stroke="#000000"
+                      stroke-width="5"
+                      stroke-linecap="round"/>
+
+                <path d="M5 5 L27 27 M27 5 L5 27"
+                      fill="000000"
+                      stroke="#111111"
+                      stroke-width="4.5"
+                      stroke-linecap="round"/>
+
+                <!-- หัวกะโหลกสีแดงทรงเหลี่ยม -->
+                <path d="
+                    M8 7
+                    L12 4
+                    H20
+                    L24 7
+                    L26 13
+                    L24 20
+                    L21 23
+                    V27
+                    H11
+                    V23
+                    L8 20
+                    L6 13 Z"
+                    fill="#E32636"
+                    stroke="#000000"
+                    stroke-width="2"
+                    stroke-linejoin="round"/>
+
+                <!-- เบ้าตา -->
+                <path d="M10 11 L14 10 L14 15 L10 16 Z
+                         M18 10 L22 11 L22 16 L18 15 Z"
+                      fill="#111111"/>
+
+                <!-- รูจมูก -->
+                <path d="M15 16 L17 16 L16 19 Z"
+                      fill="#111111"/>
+
+                <!-- ฟันแบบเรียบง่าย -->
+                <path d="M12 22 V25
+                         M16 22 V25
+                         M20 22 V25"
+                      fill="none"
+                      stroke="#FFFFFF"
+                      stroke-width="1.5"
+                      stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+
+
+function createA20Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="16"
+                 height="16"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- ขอบสีขาวตามรูปทรงรางรถไฟ -->
+                <g fill="none"
+                   stroke="#F5F5F5"
+                   stroke-width="6"
+                   stroke-linecap="square"
+                   stroke-linejoin="round">
+                    <path d="M6 2 V22"/>
+                    <path d="M18 2 V22"/>
+                    <path d="M3 5 H21"/>
+                    <path d="M3 12 H21"/>
+                    <path d="M3 19 H21"/>
+                </g>
+
+                <!-- รางและหมอนไม้สีดำ -->
+                <g fill="none"
+                   stroke="#000000"
+                   stroke-width="3"
+                   stroke-linecap="square"
+                   stroke-linejoin="round">
+                    <path d="M6 2 V22"/>
+                    <path d="M18 2 V22"/>
+                    <path d="M3 5 H21"/>
+                    <path d="M3 12 H21"/>
+                    <path d="M3 19 H21"/>
+                </g>
+            </svg>
+        `,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
+}
+
+
+function createA21Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24" height="24"
+                 viewBox="0 0 32 32"
+                 style="display:block; overflow:visible">
+
+                <!-- กรอบอุโมงค์ -->
+                <path d="
+                    M5 20
+                    V15
+                    A11 11 0 0 1 27 15
+                    V20
+                    H23
+                    V15
+                    A7 7 0 0 0 9 15
+                    V20 Z"
+                    fill="#f9f9f9"
+                    stroke="#000000"
+                    stroke-width="0.8"
+                    stroke-linejoin="round"/>
+
+                <!-- ถนน -->
+                <path d="M2 30 L12 14 H20 L30 30 Z"
+                      fill="#252525"
+                      stroke="#000000"
+                      stroke-width="0.3"
+                      stroke-linejoin="round"/>
+
+                <!-- เส้นแบ่งถนน -->
+                <path d="
+                    M15 16 H17
+                    L17.5 19 H14.5 Z
+                    M14 21 H18
+                    L18.5 25 H13.5 Z
+                    M13 27 H19
+                    L19.3 30 H12.7 Z"
+                    fill="#ffd513"/>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+function createA22Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="30" height="30"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- เขาสั้น -->
+                <path d="M6 8 L4 4 L9 6
+                         M18 8 L20 4 L15 6"
+                      fill="#F3E4C4"
+                      stroke="#333333"
+                      stroke-width="1.3"
+                      stroke-linejoin="round"/>
+
+                <!-- หู -->
+                <path d="M6 9 L1.5 7
+                         Q1 11 5.5 13
+                         M18 9 L22.5 7
+                         Q23 11 18.5 13"
+                      fill="#FFFFFF"
+                      stroke="#333333"
+                      stroke-width="1.3"
+                      stroke-linejoin="round"/>
+
+                <!-- ใบหน้าวัว -->
+                <path d="M6 6.5
+                         Q12 3.5 18 6.5
+                         Q20 10 18 16
+                         Q16 21 12 21
+                         Q8 21 6 16
+                         Q4 10 6 6.5 Z"
+                      fill="#FFFFFF"
+                      stroke="#000000"
+                      stroke-width="1.4"
+                      stroke-linejoin="round"/>
+
+                <!-- ปื้นดำเล็กบนหน้าผาก -->
+                <path d="M9 6 Q12 4.5 14 6
+                         L13 9 H10 Z"
+                      fill="#333333"/>
+
+                <!-- ตากลม -->
+                <circle cx="8.5" cy="11.5" r="1.5"
+                        fill="#333333"/>
+                <circle cx="15.5" cy="11.5" r="1.5"
+                        fill="#333333"/>
+
+                <!-- จมูกวัว -->
+                <ellipse cx="12" cy="16"
+                         rx="4" ry="2.8"
+                         fill="#F4A7B9"
+                         stroke="#333333"
+                         stroke-width="1"/>
+
+                <!-- รูจมูก -->
+                <ellipse cx="10.5" cy="16" rx="0.5" ry="0.8"
+                         fill="#8D5362"/>
+                <ellipse cx="13.5" cy="16" rx="0.5" ry="0.8"
+                         fill="#8D5362"/>
+            </svg>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+}
+
+
+
+function createA23Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24" height="24"
+                 viewBox="0 0 36 32"
+                 style="display:block; overflow:visible">
+
+                <!-- กระบะรถเหมือง ยาวขึ้น -->
+                <path d="M1 3 H24 L21 19 L2 15 Z"
+                      fill="#FFC21A"
+                      stroke="#111111"
+                      stroke-width="2.8"
+                      stroke-linejoin="round"/>
+
+                <!-- ห้องคนขับ ขยายขึ้นเล็กน้อย -->
+                <path d="M23 9 H29 L34 15 V21 H21 Z"
+                      fill="#FFC21A"
+                      stroke="#111111"
+                      stroke-width="2"
+                      stroke-linejoin="round"/>
+
+                <!-- กระจกคนขับ -->
+                <path d="M25 11 H28 L31 15 H23 Z"
+                      fill="#FFFFFF"
+                      stroke="#111111"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ล้อใหญ่ -->
+                <circle cx="8" cy="23" r="6.5"
+                        fill="#111111"/>
+                <circle cx="8" cy="23" r="3.2"
+                        fill="#FFC21A"
+                        stroke="#111111"
+                        stroke-width="1.3"/>
+
+                <circle cx="27" cy="23" r="7"
+                        fill="#111111"/>
+                <circle cx="27" cy="23" r="3.5"
+                        fill="#FFC21A"
+                        stroke="#111111"
+                        stroke-width="1.4"/>
+            </svg>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+
+function createA24Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 36 36"
+                 style="display:block; overflow:visible">
+
+                <!-- ฐานเครน -->
+                <path d="M5 31 H31"
+                      fill="none"
+                      stroke="#none"
+                      stroke-width="0"
+                      stroke-linecap="round"/>
+
+                <!-- เสาตั้งเครน -->
+                <path d="M13 30 V5 H18 V30 Z"
+                      fill="#FFC21A"
+                      stroke="#111111"
+                      stroke-width="1.8"
+                      stroke-linejoin="round"/>
+
+                <!-- แขนเครนแนวนอน -->
+                <path d="M15 5 H33 V9 H17 Z"
+                      fill="#FFC21A"
+                      stroke="#111111"
+                      stroke-width="2.7"
+                      stroke-linejoin="round"/>
+
+                <!-- ค้ำยันแขนเครน -->
+                <path d="M17 10 L27 21"
+                      fill="none"
+                      stroke="#111111"
+                      stroke-width="2"
+                      stroke-linecap="round"/>
+
+                <!-- สายยกของ -->
+                <path d="M29 9 V22"
+                      fill="none"
+                      stroke="#111111"
+                      stroke-width="2"/>
+
+                <!-- ตะขอ -->
+                <path d="M29 22
+                         C29 27 24 27 24 23"
+                      fill="111111"
+                      stroke="#FFC21A"
+                      stroke-width="5"
+                      stroke-linecap="round"/>
+
+                <path d="M29 22
+                         C29 27 24 27 24 23"
+                      fill="none"
+                      stroke="#111111"
+                      stroke-width="3"
+                      stroke-linecap="round"/>
+
+                <!-- ฐานเสา -->
+                <path d="M9 30 L11 26 H20 L22 30 Z"
+                      fill="#FFC21A"
+                      stroke="#111111"
+                      stroke-width="3"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+
+
+function createA26Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="20" height="20"
+                 viewBox="0 0 32 32"
+                 style="display:block; overflow:visible">
+
+                <!-- ตัวกล่องสีขาว -->
+                <rect x="3" y="3"
+                      width="26" height="26"
+                      fill="#F5F5F5"
+                      stroke="#111111"
+                      stroke-width="2.5"
+                      rx="1"/>
+
+                <!-- คานไม้ด้านบนและด้านล่าง -->
+                <path d="M3 7 H29 M3 25 H29"
+                      fill="none"
+                      stroke="#FFFFFF"
+                      stroke-width="4.5"/>
+
+                <path d="M3 7 H29 M3 25 H29"
+                      fill="none"
+                      stroke="#111111"
+                      stroke-width="1.3"/>
+
+                <!-- คานไม้ไขว้ X -->
+                <path d="M7 7 L25 25 M25 7 L7 25"
+                      fill="none"
+                      stroke="#FFFFFF"
+                      stroke-width="4.5"
+                      stroke-linecap="square"/>
+
+                <path d="M7 7 L25 25 M25 7 L7 25"
+                      fill="none"
+                      stroke="#555555"
+                      stroke-width="1.5"
+                      stroke-linecap="square"/>
+
+                <!-- หมุดยึดมุมกล่อง -->
+                <g fill="#111111">
+                    <circle cx="5" cy="5" r="1"/>
+                    <circle cx="27" cy="5" r="1"/>
+                    <circle cx="5" cy="27" r="1"/>
+                    <circle cx="27" cy="27" r="1"/>
+                </g>
+            </svg>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+}
+
+function createA28Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="30" height="30"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- ตัวถุง -->
+                <path d="M8 6
+                         Q12 8 16 6
+                         L19 10
+                         Q21 15 18 20
+                         Q12 23 6 20
+                         Q3 15 5 10 Z"
+                      fill="#F3D7A0"
+                      stroke="#111111"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ปากถุง -->
+                <path d="M8 6 L9 3
+                         Q12 5 15 3
+                         L16 6
+                         Q12 8.5 8 6 Z"
+                      fill="#D9B77B"
+                      stroke="#29221A"
+                      stroke-width="1.3"
+                      stroke-linejoin="round"/>
+
+                <!-- เชือกมัด -->
+                <path d="M8.5 6.5 Q12 8.5 15.5 6.5"
+                      fill="none"
+                      stroke="#76512D"
+                      stroke-width="1.8"
+                      stroke-linecap="round"/>
+
+                <!-- สัญลักษณ์เงิน -->
+                <text x="12" y="17"
+                      font-size="10"
+                      font-weight="bold"
+                      font-family="Arial, sans-serif"
+                      text-anchor="middle"
+                      fill="#4B321B">$</text>
+            </svg>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+}
+
+
+function createA29Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="34" height="34"
+                 viewBox="0 0 30 28"
+                 style="display:block; overflow:visible">
+
+                <!-- ตัวเรือยอช์ต -->
+                <path d="M3 17
+                         H27
+                         L23 23
+                         Q15 26 7 23 Z"
+                      fill="#FFFFFF"
+                      stroke="#000000"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ห้องโดยสาร -->
+                <path d="M11 11
+                         H21
+                         L24 17
+                         H9 Z"
+                      fill="#ffffff"
+                      stroke="#172B3A"
+                      stroke-width="1.2"
+                      stroke-linejoin="round"/>
+
+                <!-- หน้าต่าง -->
+                <path d="M13 13 H16 V15 H12 Z
+                         M17.5 13 H20 L21 15 H17.5 Z"
+                      fill="#000000"/>
+
+                <!-- เสากระโดง -->
+                <path d="M10 8 V17"
+                      fill="none"
+                      stroke="#ffffff"
+                      stroke-width="1.4"
+                      stroke-linecap="round"/>
+
+                <!-- ธงเล็ก -->
+                <path d="M10 8 L15 10 L10 12 Z"
+                      fill="#168FD0"/>
+
+                <!-- คลื่นน้ำ -->
+                <path d="M3 26
+                         Q6 24 9 26
+                         T15 26
+                         T21 26
+                         T27 26"
+                      fill="none"
+                      stroke="#168FD0"
+                      stroke-width="1.5"
+                      stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [34, 34],
+        iconAnchor: [17, 17]
+    });
+}
+
+
+function createA31Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                style="display:block; overflow:visible"
+                aria-label="A0 yellow pin">
+
+                <path
+                    d="M8 15
+                    C7.3 13.8 1.2 7.5 1.2 5.8
+                    A6.8 6.8 0 1 1 14.8 5.8
+                    C14.8 7.5 8.7 13.8 8 15 Z"
+                    fill="#a03aff"
+                    stroke="#000000"
+                    stroke-width="1.2"
+                    stroke-linejoin="round"/>
+
+                <circle
+                    cx="8"
+                    cy="5.8"
+                    r="1.9"
+                    fill="#000000"/>
+            </svg>
+        `,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
+    });
+}
+
+
+
+function createA32Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="22" height="22"
+                 viewBox="0 0 32 32"
+                 style="display:block; overflow:visible">
+
+                <!-- ห่วงแม่กุญแจที่เปิดออก -->
+                <path d="M12 14 V9
+                         C12 3 21 2 23 8
+                         L24 10"
+                      fill="none"
+                      stroke="#111111"
+                      stroke-width="8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+
+                <path d="M12 14 V9
+                         C12 3 21 2 23 8
+                         L24 10"
+                      fill="none"
+                      stroke="#D9DDE2"
+                      stroke-width="3.3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+
+                <!-- ตัวแม่กุญแจ -->
+                <rect x="5" y="13" width="20" height="16"
+                      rx="3"
+                      fill="#FFC928"
+                      stroke="#111111"
+                      stroke-width="2.3"/>
+
+                <!-- รูแม่กุญแจ -->
+                <circle cx="15" cy="19" r="3"
+                        fill="#111111"/>
+
+                <path d="M15 20.5 V24"
+                      stroke="#111111"
+                      stroke-width="2.5"
+                      stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+
+function createA33Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="18"
+                 height="18"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- ขอบสีขาวรอบตู้ไฟ -->
+                <rect x="3" y="2" width="18" height="20"
+                      rx="2"
+                      fill="#FFFFFF"
+                      stroke="#f0bd0b"
+                      stroke-width="3.3"
+                      stroke-linejoin="round"/>
+
+                <!-- ตัวตู้ไฟ -->
+                <rect x="3" y="2" width="18" height="20"
+                      rx="2"
+                      fill="#111111"
+                      stroke="#111111"
+                      stroke-width="1.2"/>
+
+                <!-- ขอบประตูตู้ -->
+                <rect x="5" y="4" width="14" height="16"
+                      rx="1"
+                      fill="none"
+                      stroke="#AEB5BE"
+                      stroke-width="0.8"/>
+
+                <!-- สัญลักษณ์สายฟ้า -->
+                <path d="M13.5 5 L7.5 13 H11.5
+                         L10.5 19 L16.5 10.5 H12.5 Z"
+                      fill="#edbd16"
+                      stroke="#edbd16"
+                      stroke-width="0.8"
+                      stroke-linejoin="round"/>
+
+                <!-- มือจับตู้ -->
+                <rect x="16.5" y="14" width="1" height="3"
+                      rx="0.4"
+                      fill="#FFFFFF"/>
+            </svg>
+        `,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9]
+    });
+}
+
+
+function createA34Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+            
+                <!-- ตัวหน้ากากสีขาว -->
+                <path d="M5 6
+                         Q12 3 19 6
+                         L18 16
+                         Q12 22 6 16 Z"
+                      fill="#FFFFFF"
+                      stroke="#111111"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ช่องตา -->
+                <ellipse cx="9" cy="10" rx="1.7" ry="1.2"
+                         fill="#111111"/>
+                <ellipse cx="15" cy="10" rx="1.7" ry="1.2"
+                         fill="#111111"/>
+
+                <!-- เส้นปากหน้ากาก -->
+                <path d="M9 15 Q12 17 15 15"
+                      fill="none"
+                      stroke="#111111"
+                      stroke-width="1.2"
+                      stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+
+function createA35Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="26" height="26"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <!-- วงกลมสีพีช -->
+                <circle cx="12" cy="12" r="11.5"
+                        fill="#8e3900"
+                        stroke="#000000"
+                        stroke-width="1"
+                        stroke-linejoin="round"/>
+
+                <!-- เงาทแยง -->
+                <path d="M11.5 3 H13 L12 6
+                         L13.5 8 L13 11
+                         L21.5 19.5 L19 22
+                         L8 16 L5 12 Z"
+                      fill="#A96958"
+                      opacity="0.55"/>
+
+                <!-- ไอน้ำกาแฟ -->
+                <path d="M8 4 Q7 5 8 6
+                         M11 3 Q10 4 11 5
+                         M14 4 Q13 5 14 6"
+                      fill="none"
+                      stroke="#FFF4CF"
+                      stroke-width="1.1"
+                      stroke-linecap="round"/>
+
+                <!-- หูถ้วย -->
+                <path d="M16 10 H18
+                         V13 Q18 15 16 15"
+                      fill="none"
+                      stroke="#FFFFFF"
+                      stroke-width="1.5"
+                      stroke-linejoin="round"/>
+
+                <!-- ตัวถ้วยกาแฟ -->
+                <path d="M6 9 H16 V14
+                         Q16 17 13 17 H9
+                         Q6 17 6 14 Z"
+                      fill="#FFFFFF"/>
+                      
+
+                <!-- เงาด้านขวาของถ้วย -->
+                <path d="M11 9 H16 V14
+                         Q16 17 13 17 H11 Z"
+                      fill="#E8EDF5"/>
+
+                <!-- จานรอง -->
+                <path d="M4.5 18 H18
+                         V19.5 H4.5 Z"
+                      fill="#FFFFFF"/>
+
+                <path d="M11 18 H18 V19.5 H11 Z"
+                      fill="#D5DCE8"/>
+            </svg>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+    });
+}
+
+function createA38Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="24" height="22"
+                 viewBox="0 0 28 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M2 8
+                         C5 3, 9 3, 12 8
+                         S19 13, 22 8
+                         S26 5, 27 7"
+                      fill="002aff"
+                      stroke="#00baff"
+                      stroke-width="3"
+                      stroke-linecap="round"/>
+
+                <path d="M2 15
+                         C5 10, 9 10, 12 15
+                         S19 20, 22 15
+                         S26 12, 27 14"
+                      fill="002aff"
+                      stroke="#00baff"
+                      stroke-width="3"
+                      stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [24, 22],
+        iconAnchor: [12, 11]
+    });
+}
+
+
+
+function createA39Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="22" height="22"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M5 4 V14
+                         Q5 20 12 20
+                         Q19 20 19 14
+                         V4"
+                      fill="none"
+                      stroke="#000000"
+                      stroke-width="8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+
+                <path d="M5 4 V14
+                         Q5 20 12 20
+                         Q19 20 19 14
+                         V4"
+                      fill="none"
+                      stroke="#80E6D0"
+                      stroke-width="5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11]
+    });
+}
+
+function createA41Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#43ffd5"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#43ffd5"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA42Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#ffffff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#ffffff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA43Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#ffae00"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#ffae00"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA44Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#ffe400"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#ffe400"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA45Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#f00000"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#f00000"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA46Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#ff79ff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#ff79ff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA47Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#6eceff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#6eceff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA48Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#2864ff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#2864ff"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA49Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#f9bdbb"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#f9bdbb"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA50Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#a78126"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#a78126"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA51Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#893acd"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#893acd"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+function createA52Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="28" height="28"
+                 viewBox="0 0 24 24"
+                 style="display:block; overflow:visible">
+
+                <path d="M3 6 L8 11 L12 2 L16 11 L21 6 L19 18 L5 18 Z"
+                      fill="#20ff20"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+
+                <rect x="5" y="18" width="14" height="3"
+                      fill="#20ff20"
+                      stroke="#000000"
+                      stroke-width="1.7"
+                      stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+    });
+}
+
+
+
+/* =========================================
+   4. ไอคอน A1: สถานีตำรวจ
+   เก็บไว้สำหรับเปิดใช้ในอนาคต
+========================================= */
+
+function createPoliceIcon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg class="category-svg"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 32 36"
+                aria-label="Police station">
+
+                <path
+                    d="M16 2 L28 7 V17
+                    C28 25 22.5 31 16 34
+                    C9.5 31 4 25 4 17 V7 Z"
+                    fill="#080808"
+                    stroke="#d9ad43"
+                    stroke-width="2.4"
+                    stroke-linejoin="round"/>
+
+                <path
+                    d="M16 6 L24 9.2 V17
+                    C24 22.3 20.5 26.8 16 29
+                    C11.5 26.8 8 22.3 8 17 V9.2 Z"
+                    fill="none"
+                    stroke="#f4d477"
+                    stroke-width="1.1"/>
+
+                <path
+                    d="M16 10 L18 14.2 L22.6 14.8
+                    L19.3 18 L20.1 22.5 L16 20.3
+                    L11.9 22.5 L12.7 18 L9.4 14.8
+                    L14 14.2 Z"
+                    fill="#d9ad43"
+                    stroke="#f4d477"
+                    stroke-width=".6"
+                    stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [20, 22],
+        iconAnchor: [10, 11]
+    });
+}
+
+/* =========================================
+   5. ไอคอน A2: โรงพยาบาล
+   เก็บไว้สำหรับเปิดใช้ในอนาคต
+========================================= */
+
+function createMedicalIcon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg class="category-svg"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 32 32"
+                aria-label="Hospital">
+
+                <path
+                    d="M11 3 H21 V11 H29 V21
+                    H21 V29 H11 V21 H3 V11 H11 Z"
+                    fill="#f32632"
+                    stroke="#ffffff"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"/>
+            </svg>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+    });
+}
+
+/* =========================================
+   6. ไอคอน A3: ปั๊มน้ำมัน
+   เก็บไว้สำหรับเปิดใช้ในอนาคต
+========================================= */
+
+function createFuelIcon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg class="category-svg"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 32 36"
+                aria-label="Gas station">
+
+                <path
+                    d="M6 32 V5 Q6 3 8 3 H20 Q22 3 22 5 V32 Z"
+                    fill="#111111"
+                    stroke="#ffffff"
+                    stroke-width="1.8"
+                    stroke-linejoin="round"/>
+
+                <rect
+                    x="9" y="7"
+                    width="10" height="9"
+                    rx="1"
+                    fill="#e8e8e8"
+                    stroke="#ffffff"
+                    stroke-width=".7"/>
+
+                <path
+                    d="M11 10 H17 M11 12.5 H16"
+                    stroke="#555555"
+                    stroke-width="1.2"/>
+
+                <path
+                    d="M22 9 H24.5 Q27 9 27 12 V22
+                    Q27 24 29 24 V28 Q29 30 27 30
+                    Q25 30 25 28 V22"
+                    fill="none"
+                    stroke="#f0f0f0"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"/>
+
+                <path
+                    d="M4 32 H24"
+                    stroke="#f0f0f0"
+                    stroke-width="2"
+                    stroke-linecap="round"/>
+            </svg>
+        `,
+        iconSize: [20, 22],
+        iconAnchor: [10, 11]
+    });
+}
+
+/* =========================================
+   7. ไอคอนหมวดหมู่เพิ่มเติม
+   เก็บโค้ดไว้สำหรับพัฒนาต่อในอนาคต
+========================================= */
+
+function createBasicCategoryIcon(category) {
+    const icons = {
+        NA: { color: '#222222', shape: 'pin' },
+        B:  { color: '#0057FF', shape: 'pin' },
+        S:  { color: '#ffdf00', shape: 'star' },
+        A0: { color: '#ffdf00', shape: 'diamond' }
+    };
+
+    const item = icons[category];
+
+    if (!item) {
+        return createNaIcon();
+    }
+
+    let shape = '';
+
+    if (item.shape === 'pin') {
+        shape = `
+            <path
+                d="M24 3
+                C14 3 8 10 8 19
+                C8 29 24 45 24 45
+                C24 45 40 29 40 19
+                C40 10 34 3 24 3 Z"
+                fill="${item.color}"
+                stroke="#ffffff"
+                stroke-width="2.5"/>
+
+            <circle
+                cx="24" cy="18"
+                r="3"
+                fill="#ffffff"/>
+        `;
+    } else if (item.shape === 'star') {
+        shape = `
+            <polygon
+                points="24,3 29,17 44,17 32,26
+                36,41 24,32 12,41 16,26 4,17 19,17"
+                fill="${item.color}"
+                stroke="#333333"
+                stroke-width="2"/>
+        `;
+    } else if (item.shape === 'diamond') {
+        shape = `
+            <polygon
+                points="24,3 43,24 24,45 5,24"
+                fill="${item.color}"
+                stroke="#333333"
+                stroke-width="2"/>
+        `;
+    }
+
+    const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 48 48">
+            ${shape}
+        </svg>
+    `;
+
+    return L.divIcon({
+        className: '',
+        html: svg,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12]
+    });
+}
+
+/* =========================================
+   8. โหมดปัจจุบัน
+   ทุกหมวดใช้ไอคอน NA
+   เปลี่ยนฟังก์ชันนี้ภายหลังเพื่อเปิดใช้
+   หมวด A1, A2, A3 และหมวดอื่น ๆ
+========================================= */
+
+
+
+
+
+
+function createLocationIcon(category) {
+    if (category === 'B') {
+        return createBIcon();
+    }
+
+    if (category === 'S') {
+        return createSIcon();
+    }
+
+    if (category === 'A0') {
+        return createA0Icon();
+    }
+
+    if (category === 'A1') {
+        return createA1Icon();
+    }
+
+    if (category === 'A2') {
+        return createA2Icon();
+    }
+
+    if (category === 'A3') {
+        return createA3Icon();
+    }
+
+    if (category === 'A4') {
+        return createA4Icon();
+    }
+
+    if (category === 'A5') {
+        return createA5Icon();
+    }
+
+    if (category === 'A6') {
+        return createA6Icon();
+    }
+
+    if (category === 'A7') {
+        return createA7Icon();
+    }
+
+    if (category === 'A8') {
+        return createA8Icon();
+    }
+
+    if (category === 'A9') {
+        return createA9Icon();
+    }
+
+    if (category === 'A10') {
+        return createA10Icon();
+    }
+
+    if (category === 'A11') {
+        return createA11Icon();
+    }
+
+    if (category === 'A12') {
+        return createA12Icon();
+    }
+
+    if (category === 'A13'){
+        return createA13Icon(); 
+    }
+
+    if (category === 'A14'){
+        return createA14Icon(); 
+    }
+    
+    if (category === 'A15') {
+        return createA15Icon();
+    }
+
+    if (category === 'A16') {
+        return createA16Icon();
+    }
+
+    if (category === 'A17') {
+        return createA17Icon();
+    }
+
+    if (category === 'A18') {
+        return createA18Icon();
+    }
+
+    if (category === 'A19') {
+        return createA19Icon();
+    }
+
+    if (category === 'A20') {
+        return createA20Icon();
+    }
+
+    if (category === 'A21') {
+        return createA21Icon();
+    }
+
+    if (category === 'A22') {
+        return createA22Icon();
+    }
+
+    if (category === 'A23') {
+        return createA23Icon();
+    }
+
+    if (category === 'A24') {
+        return createA24Icon();
+    }
+
+    if (category === 'A26') {
+        return createA26Icon();
+    }
+
+    if (category === 'A28') {
+        return createA28Icon();
+    }
+
+    if (category === 'A31') {
+        return createA31Icon();
+    }
+
+    if (category === 'A29') {
+        return createA29Icon();
+    }
+
+     if (category === 'A32') {
+        return createA32Icon();
+    }
+
+    if (category === 'A33') {
+        return createA33Icon();
+    }
+
+    if (category === 'A34') {
+        return createA34Icon();
+    }
+
+    if (category === 'A35') {
+        return createA35Icon();
+    }
+
+    if (category === 'A38') {
+        return createA38Icon();
+    }
+
+    if (category === 'A39') {
+        return createA39Icon();
+    }
+
+    if (category === 'A41') {
+        return createA41Icon();
+    }
+
+    if (category === 'A42') {
+        return createA42Icon();
+    }
+
+    if (category === 'A43') {
+        return createA43Icon();
+    }
+
+    if (category === 'A44') {
+        return createA44Icon();
+    }
+
+    if (category === 'A45') {
+        return createA45Icon();
+    }
+
+    if (category === 'A46') {
+        return createA46Icon();
+    }
+
+    if (category === 'A47') {
+        return createA47Icon();
+    }
+
+    if (category === 'A48') {
+        return createA48Icon();
+    }
+
+    if (category === 'A49') {
+        return createA49Icon();
+    }
+
+    if (category === 'A50') {
+        return createA50Icon();
+    }
+
+    if (category === 'A51') {
+        return createA51Icon();
+    }
+
+    if (category === 'A52') {
+        return createA52Icon();
+    }
+
+    return createNaIcon();
+}
+
+
+
+
+
+
+/* =========================================
+   9. โหลดข้อมูลสถานที่
+   ไม่แก้ไขชื่อหรือพิกัดใน locations.json
+========================================= */
+
+fetch('locations.json')
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(
+                'ไม่สามารถโหลด locations.json ได้'
+            );
+        }
+
+        return response.json();
+    })
+    .then(locations => {
+        if (!Array.isArray(locations)) {
+            throw new Error(
+                'รูปแบบ locations.json ต้องเป็น Array'
+            );
+        }
+
+        let validCount = 0;
+        let invalidCount = 0;
+
+        locations.forEach((location, index) => {
+            if (
+                !location ||
+                typeof location.name !== 'string' ||
+                location.name.trim() === '' ||
+                typeof location.x !== 'number' ||
+                !Number.isFinite(location.x) ||
+                typeof location.y !== 'number' ||
+                !Number.isFinite(location.y)
+            ) {
+                console.warn(
+                    `ข้อมูลสถานที่ลำดับที่ ${index + 1} ไม่ถูกต้อง:`,
+                    location
+                );
+
+                invalidCount++;
+                return;
+            }
+
+            const category =
+                typeof location.category === 'string' &&
+                location.category.trim() !== ''
+                    ? location.category.trim().toUpperCase()
+                    : 'NA';
+
+            const leafletX = location.x;
+            const leafletY = mapHeight - location.y;
+
+            const marker = L.marker(
+                [leafletY, leafletX],
+                {
+                    icon: createLocationIcon(category)
+                }
+            ).addTo(map);
+
+            /* ชี้เมาส์เพื่อแสดงชื่อสถานที่ */
+            marker.bindTooltip(location.name, {
+                direction: 'top',
+                offset: [0, -8],
+                opacity: 0.95
+            });
+
+            validCount++;
+        });
+
+        console.info(
+            `โหลดสถานที่สำเร็จ ${validCount} จุด; ` +
+            `ข้อมูลไม่ถูกต้อง ${invalidCount} จุด`
+        );
+    })
+    .catch(error => {
+        console.error(error);
+
+        alert(
+            'ไม่สามารถโหลด locations.json ได้ ' +
+            'กรุณาตรวจสอบว่าไฟล์อยู่ในโฟลเดอร์เดียวกับ index.html ' +
+            'และเปิดผ่าน Live Server'
+        );
+    });
+
+/* =========================================
+   10. แสดงพิกัดขณะเลื่อนเมาส์
+========================================= */
+
+map.on('mousemove', function(event) {
+    const x = Math.round(event.latlng.lng);
+    const y = Math.round(mapHeight - event.latlng.lat);
+
+    document.getElementById(
+        'mouse-coordinates'
+    ).innerHTML = `X: ${x}<br>Y: ${y}`;
+});
+
+/* =========================================
+   11. แสดงพิกัดเมื่อคลิกแผนที่
+   การคลิกหมุดไม่เปิดหน้าต่างรายละเอียด
+========================================= */
+
+map.on('click', function(event) {
+    const x = Math.round(event.latlng.lng);
+    const y = Math.round(mapHeight - event.latlng.lat);
+
+    document.getElementById(
+        'clicked-coordinates'
+    ).innerHTML = `Click X: ${x}<br>Click Y: ${y}`;
+});
+</script>
+</body>
+</html>
