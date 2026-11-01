@@ -399,9 +399,9 @@ function createA1Icon() {
         className: '',
         html: `
             <svg xmlns="http://www.w3.org/2000/svg"
-                 width="30" height="30"
+                 width="28" height="28"
                  viewBox="0 0 32 32"
-                 style="display:block;width:30px;height:30px">
+                 style="display:block;width:28px;height:28px">
 
                 <!-- โล่สีดำ ขอบทอง -->
                 <path d="M3 5 L16 1.5 L29 5
@@ -431,8 +431,8 @@ function createA1Icon() {
 
             </svg>
         `,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15]
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
     });
 }
 
@@ -2516,6 +2516,53 @@ function createA52Icon() {
     });
 }
 
+function createA53Icon() {
+    return L.divIcon({
+        className: '',
+        html: `
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 width="26" height="26"
+                 viewBox="0 0 32 32"
+                 style="display:block;width:28px;height:28px">
+
+                <!-- รูปทรงแคปซูล -->
+                <g transform="rotate(45 16 16)">
+
+                    <!-- ครึ่งสีม่วง -->
+                    <path d="
+                        M8 16
+                        V11
+                        A8 8 0 0 1 24 11
+                        V16 Z"
+                        fill="#922FE0"/>
+
+                    <!-- ครึ่งสีดำ -->
+                    <path d="
+                        M8 16
+                        V21
+                        A8 8 0 0 0 24 21
+                        V16 Z"
+                        fill="#111111"/>
+
+                    <!-- ขอบสีขาว -->
+                    <rect x="8" y="3" width="16" height="26"
+                          rx="8"
+                          fill="none"
+                          stroke="#f5f5f5"
+                          stroke-width="1.5"/>
+
+                    <!-- เส้นแบ่งสี -->
+                    <path d="M8.2 16 H23.8"
+                          stroke="#f5f5f5"
+                          stroke-width="1.5"/>
+                </g>
+            </svg>
+        `,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13]
+    });
+}
+
 
 
 /* =========================================
@@ -2934,6 +2981,10 @@ function createLocationIcon(category) {
 
     if (category === 'A52') {
         return createA52Icon();
+    }
+
+    if (category === 'A53') {
+        return createA53Icon();
     }
 
     return createNaIcon();
